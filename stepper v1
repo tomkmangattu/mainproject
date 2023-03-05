@@ -1,0 +1,36 @@
+#include<AccelStepper.h>
+
+#define FULLSTEP 4
+#define HALFSTEP 8
+
+// 1 2 3 4
+
+AccelStepper stepper(FULLSTEP, 1, 3, 2, 4);
+
+void setup(){
+  stepper.setMaxSpeed(1000);
+  stepper.setAcceleration(50);
+  stepper.setSpeed(500);
+  stepper.moveTo(2048);
+  Serial.begin(9600);
+}
+
+int currentStep = 0;
+
+void loop(){
+//  if(stepper.distanceToGo() == 0){
+//    stepper.moveTo( - stepper.currentPosition());
+//  }
+//  stepper.run();
+
+  if(stepper.distanceToGo() == 0){
+    delay(5000);
+    int degreeValue = random(361);  // generates a random integer between 0 and 180 (inclusive) example input value in degrees
+    Serial.println(degreeValue);
+    int steppsToMove = map(degreeValue, 0, 360, 0, 2048);  // maps degreeValue to 0-2048 range
+    stepper.moveTo(steppsToMove - currentStep);
+    currentStep = steppsToMove;
+  }
+
+  stepper.run();
+}
