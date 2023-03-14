@@ -1,0 +1,110 @@
+import cv2
+import numpy as np
+
+board_img = cv2.imread('assets/wh1.jpeg')
+cv2.imshow("original image",board_img)
+edge_lines = np.copy(board_img) # copy image
+
+gray = cv2.cvtColor(board_img, cv2.COLOR_BGR2GRAY) # convert to gray
+edges = cv2.Canny(gray, 50, 150, apertureSize=3) # find edges using canny edge detection
+cv2.imshow('edges of image', edges) # display image with edges
+
+# finding boundaries in image
+lines = cv2.HoughLines(edges, 0.5, np.pi / 180, 200) 
+
+# drawing lines through boundaries
+points = []
+for line in lines:
+    rho,theta = line[0]
+    a = np.cos(theta)
+    b = np.sin(theta)
+    x0 = a * rho
+    y0 = b * rho
+
+    x1 = int(x0 + 1000 * (-b))
+    y1 = int(y0 + 1000 * (a))
+    x2 = int(x0 - 1000 * (-b))
+    y2 = int(y0 - 1000 * (a))
+
+    cv2.line(edge_lines, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    points.append([x1, y1, x2, y2])
+    
+
+cv2.imshow('edge lines', edge_lines)
+
+# find board corners
+# x_r = board right corner
+# x_l = board left  corner
+# y_b = board bottom corner
+# y_t = board top corner
+
+x_r, x_l = 1000, 0
+y_b, y_t = 1000, 0
+for point in points:
+    x1, y1, x2, y2 = point
+
+    if abs(x1) < 999 and abs(x2) < 999:
+        if x1 < 500:     
+            x_l = max(x_l, x1)
+        else:           
+            x_r = min(x_r, x1)
+    else:
+        if y1 < 100:          
+            y_t = max(y_t, y1)
+        else:           
+            y_b = min(y_b, y1)
+
+# mark area inside board
+board_area = np.copy(board_img)
+cv2.line(board_area, (x_r, y_t), (x_l, y_t), (254, 0, 0), 2)
+cv2.line(board_area, (x_r, y_t), (x_r, y_b), (254, 0, 0), 2)
+cv2.line(board_area, (x_l, y_t), (x_l, y_b), (254, 0, 0), 2)
+cv2.line(board_area, (x_l, y_b), (x_r, y_b), (254, 0, 0), 2)
+
+cv2.imshow("board area", board_area)
+
+
+# remove board boundary and surroundings from image
+# make area other than board writable area black
+edges_in_notes = np.copy(edges)
+cv2.rectangle(edges_in_notes, (0, 0), (1000,y_t + 2), (0, 1, 0), -1)
+cv2.rectangle(edges_in_notes, (0, 0), (x_l + 2,1000), (0, 1, 0), -1)
+cv2.rectangle(edges_in_notes, (x_r - 2, 0), (1000,1000), (0, 1, 0), -1)
+cv2.rectangle(edges_in_notes, (0, y_b - 2), (1000,1000), (0, 1, 0), -1)
+
+cv2.imshow("edges in notes", edges_in_notes)
+
+# finding area containing notes in image
+col_sum = np.sum(edges_in_notes, axis= 0) # sum of each column
+row_sum = np.sum(edges_in_notes, axis= 1) # sum of each row
+
+col_len = len(col_sum)
+row_len = len(row_sum)
+
+r_s, r_e = 0, 0 # row where writing starts, row where writing ends
+c_s, c_e = 0, 0 # column where writing starts, column where writing ends
+
+for k in range(len(row_sum)):
+    if row_sum[k] > col_len// 4:
+        if r_s == 0:
+            r_s = k
+        elif row_sum[k] == max(row_sum[k:]):
+            r_e = k
+for k in range(len(col_sum)):
+    if col_sum[k] > row_len// 4:
+        if c_s == 0:
+            c_s = k
+        elif col_sum[k] == max(col_sum[k:]):
+            c_e = k
+
+
+written_area = np.copy(board_img)
+cv2.line(written_area, (c_s, r_s) , (c_s, r_e), (150, 150, 0), 2)
+cv2.line(written_area, (c_s, r_s) , (c_e, r_s), (150, 150, 0), 2)
+cv2.line(written_area, (c_e, r_s) , (c_e, r_e), (150, 150, 0), 2)
+cv2.line(written_area, (c_s, r_e) , (c_e, r_e), (150, 150, 0), 2)
+cv2.imshow("written area", written_area)
+
+
+k = cv2.waitKey(0)
+cv2.destroyAllWindows()
