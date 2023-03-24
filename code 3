@@ -1,0 +1,236 @@
+#include<AccelStepper.h>
+#include <Servo.h>
+#include <math.h>
+
+#define FULLSTEP 4
+#define HALFSTEP 8
+
+AccelStepper stepper(FULLSTEP, 3, 5, 4, 6);
+Servo shoulderServo;
+Servo wristServo;
+Servo supportServo;
+
+int currentAngle = 90;
+boolean started = true;
+int prevShoulderAngle = 0;
+int prevElbowAngle = 0;
+
+void setup(){
+  initStepper();
+  shoulderServo.attach(PA0);
+  supportServo.attach(PA1);
+  wristServo.attach(PA2);
+  Serial.begin(9600);
+  delay(250);
+}
+
+void loop(){
+  if(stepper.distanceToGo() == 0){
+    delay(5000);
+    calculate();
+    Serial.println("-------------------");
+  }else{
+    stepper.run();
+  }
+}
+
+void initStepper(){
+  stepper.setMaxSpeed(1000);
+  stepper.setAcceleration(50);
+  stepper.setSpeed(500);
+}
+
+void stepperMoveSteps(int steps){
+
+  stepper.move(steps);
+  while(!(stepper.distanceToGo() == 0)){
+  stepper.run();
+}
+}
+
+void moveStepper(int angle){
+    if(started){
+      int steppsToMove = - map(90 - angle, 0, 360, 0, 2048);  // maps degreeValue to 0 to 1024 range
+      stepper.move(steppsToMove);
+  
+      while(!(stepper.distanceToGo() == 0)){
+        stepper.run();
+      }
+      currentAngle = angle;
+      started = false;
+    }else{
+      int steppsToMove = - map(currentAngle - angle, 0, 360, 0, 2048);  // maps degreeValue to 0 to 1024 range
+      stepper.move(steppsToMove);
+  
+      while(!(stepper.distanceToGo() == 0)){
+        stepper.run();
+      }
+      currentAngle = angle;
+    }
+}
+
+void moveStepperPositiveDir(int angle){
+    if(started){
+      int steppsToMove =  map(90 - angle, 0, 360, 0, 2048);  // maps degreeValue to 0 to 1024 range
+      stepper.move(steppsToMove);
+  
+      while(!(stepper.distanceToGo() == 0)){
+        stepper.run();
+      }
+      currentAngle = angle;
+      started = false;
+    }else{
+      int steppsToMove = map(currentAngle - angle, 0, 360, 0, 2048);  // maps degreeValue to 0 to 1024 range
+      stepper.move(steppsToMove);
+  
+      while(!(stepper.distanceToGo() == 0)){
+        stepper.run();
+      }
+      currentAngle = angle;
+    }
+}
+
+void moveShoulderServo(int angle){
+   shoulderServo.write(angle);
+}
+
+void calculate(){
+  int x1 = 0;
+  int x2 = 54;
+  int y1 = 0;
+  int y2 = 42;
+  int w = 6;
+  int points[1000][2];
+  int numPoints = 0;
+  for (int x = y1; x <= y2; x += w) {
+    for (int y = x1; y <= x2; y += w) {
+      points[numPoints][0] = y;
+      points[numPoints][1] = x;
+      numPoints++;
+    }
+  }
+
+  int x_max = 54;
+  for (int i = 0; i < numPoints; i++) {
+    points[i][0] = points[i][0] - x_max/2;
+  }
+
+//  for (int i = 0; i < numPoints; i++) {
+//    int x = points[i][0];
+//    int y = points[i][1];
+//    if(x <= 0)
+//      calculateAngle(x, y);
+//  }
+  stepperMoveSteps(- 1024);
+  for (int i = 0; i < numPoints; i++) {
+    int x = points[i][0];
+    int y = points[i][1];
+    if(x >= 0)
+      calculatepositiveSideAngle(x, y);
+  }
+  
+  // calculateAngle(27.0);
+  
+}
+
+void calculateAngle(double x, double y) {
+    Serial.print(x);
+    Serial.print(" ");
+    Serial.println(y);
+  if( x > -6 && x < 6){
+    
+      moveShoulderServo(prevShoulderAngle + 10);
+     // moveStepper(prevElbowAngle - 10);
+      clean();
+  }else{
+      double c = sqrt( x * x + y * y);
+      //Serial.println(c);
+      Serial.println(c);
+      // Use the law of cosines to calculate the angle opposite side a
+      double a = 24;
+      double b = 27;
+      
+      double cosA = (b * b + c * c - a * a) / (2 * b * c);
+      double A = acos(cosA) * 180 / M_PI; // Convert radians to degrees
+    
+      // Use the law of cosines to calculate the angle opposite side b
+      double cosB = (c * c + a * a - b * b) / (2 * c * a);
+      double B = acos(cosB) * 180 / M_PI; // Convert radians to degrees
+    
+      // Calculate the angle opposite side c
+      double C = 180 - A - B;
+      Serial.print(C);
+      if(y > 0){
+        int offset = atan(y/x) * (180 / PI);
+        moveShoulderServo(offset + B);
+        Serial.print(" ");
+        Serial.print(y/x);
+        Serial.print(" ");
+        Serial.println(B + offset);
+        prevShoulderAngle = offset + B;
+      }else{
+        moveShoulderServo(B);
+        Serial.print(" ");
+        Serial.println(B);
+        prevShoulderAngle = B;
+      }
+      prevElbowAngle = C;
+      moveStepper(C);
+      clean();
+  }
+}
+
+void calculatepositiveSideAngle(double x, double y) {
+    Serial.print(x);
+    Serial.print(" ");
+    Serial.println(y);
+  if( x > -6 && x < 6){
+    
+      // moveShoulderServo(prevShoulderAngle + 10);
+     // moveStepper(prevElbowAngle - 10);
+      clean();
+  }else{
+      double c = sqrt( x * x + y * y);
+      //Serial.println(c);
+      Serial.println(c);
+      // Use the law of cosines to calculate the angle opposite side a
+      double a = 24;
+      double b = 27;
+      
+      double cosA = (b * b + c * c - a * a) / (2 * b * c);
+      double A = acos(cosA) * 180 / M_PI; // Convert radians to degrees
+    
+      // Use the law of cosines to calculate the angle opposite side b
+      double cosB = (c * c + a * a - b * b) / (2 * c * a);
+      double B = acos(cosB) * 180 / M_PI; // Convert radians to degrees
+    
+      // Calculate the angle opposite side c
+      double C = 180 - A - B;
+      Serial.print(C);
+      if(y > 0){
+        int offset = atan( y/x) * (180 / PI);
+        moveShoulderServo(offset + B);
+        Serial.print(" ");
+        Serial.print(y/x);
+        Serial.print(" ");
+        Serial.println(180 - (B + offset));
+        prevShoulderAngle = offset + B;
+      }else{
+        moveShoulderServo(180 - B);
+        Serial.print(" ");
+        Serial.println(B);
+        prevShoulderAngle = B;
+      }
+      prevElbowAngle = C;
+      moveStepperPositiveDir(C);
+      clean();
+  }
+}
+
+void clean(){
+  supportServo.write(90);
+  // wristServo.write(0);
+  delay(500);
+  // wristServo.write(90);
+  supportServo.write(60);
+}
